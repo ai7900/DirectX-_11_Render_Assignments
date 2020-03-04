@@ -1,0 +1,110 @@
+Texture2D texAmbient : register(t0);
+Texture2D texDiffuse : register(t1);
+Texture2D texSpecular : register(t2);
+Texture2D texNormal : register(t4);
+//Texture2D texCubeMap : register(t5);
+
+SamplerState texSampler         : register(s0);
+SamplerState trilinearSampler   : register(s1);
+
+struct PSIn
+{
+	float4 Pos  : SV_Position;
+	float3 Wpos : Position;
+	float3 Normal : NORMAL;
+    float3 Tangent : TANGENT;
+    float3 Binormal : BINORMAL;
+	float2 TexCoord : TEX;
+};
+
+cbuffer LightCameraBuffer : register(b0)
+{
+	float4 cameraPos;
+	float4 lightPos;
+};
+
+cbuffer MaterialBuffer : register(b1)
+{
+	float4 ka, kd, ks, alpha;
+    int hasAmbient, hasDiffuse, hasSpecular, hasAlpha, hasNormalMap;      // bools
+};
+
+cbuffer DisplayModeChange : register(b2)
+{
+    int isPhong, isNormal, isTexture;
+    int isAmbient, isDiffuse, isSpecular;
+}
+
+
+//-----------------------------------------------------------------------------------------
+// Pixel Shader
+//-----------------------------------------------------------------------------------------
+
+float4 PS_main(PSIn input) : SV_Target
+{	
+	// Debug shading #1: map and return normal as a color, i.e. from [-1,1]->[0,1] per component
+	// The 4:th component is opacity and should be = 1
+    //return float4(input.Normal * 0.5 + 0.5, 1);
+    
+    // Set new Texture normal
+    float3 normal = input.Normal;
+    float3 binormal = input.Binormal;
+    float3 tangent = input.Tangent;
+    
+    float3 normalTexColor = texNormal.Sample(texSampler, input.TexCoord);
+    float3 manipulatedNormal = normalTexColor * 2 - 1;
+    manipulatedNormal.y *=  -1;
+    
+    float3x3 TBN = (float3x3(tangent, binormal, normal));
+    
+    normal = !hasNormalMap && length(normalTexColor) > 0 ? input.Normal : normalize(mul(manipulatedNormal, TBN));
+    
+    
+    
+    // Set diffuse, ambient and specular colors
+    float3 sampleDiffuseTex = texDiffuse.Sample(texSampler, input.TexCoord);
+    float3 sampleAmbientTex = texAmbient.Sample(texSampler, input.TexCoord);
+    float3 sampleSpecularTex = texSpecular.Sample(texSampler, input.TexCoord);
+
+    float3 diffuse = length(sampleDiffuseTex) != 0 && !hasDiffuse ? sampleDiffuseTex : kd.xyz;
+    float3 ambient = length(sampleAmbientTex) != 0 && !hasAmbient ? sampleAmbientTex : ka.xyz;
+    float3 specular = length(sampleSpecularTex) != 0 && !hasSpecular ? sampleSpecularTex : ka.xyz;
+    float alpha_ = alpha.x;
+ 
+    ambient *= 0.3f;
+    
+    //Phong shading
+    float3 lightVector = normalize(lightPos.xyz - input.Wpos); // Normalized vector pointing towards lightsoruce
+    float dotProductLightVec = dot(lightVector.xyz, normal);          // |L|*|N|cos(angle) will return a value between 0 and 1.
+    
+    float3 viewVector = normalize(cameraPos.xyz - input.Wpos);              // Normalized vector pointing towards cameraPos 
+    float3 reflectVector = normalize(reflect(-lightVector, normal));  // Returns lightvector reflected on surface normal
+    float dotProductReflView = dot(reflectVector, viewVector);              // |R|*|V|cos(angle) will return a value between 0 and 1.
+   
+    // Phong-shading equation: I = ka + max(kd(L * N) + ks(R * V)^a)
+    // Not that '*' <-- is dot!
+    // L * N = dotProductLightVec
+    // R * V = dotProductReflView
+    // a = alpha
+    
+    float3 PhongShader = ambient + max(diffuse * dotProductLightVec, 0) + max(specular * pow(dotProductReflView, alpha_), 0);
+
+    // Different outputs
+    if (isPhong)
+        return float4(PhongShader, 0);
+    else if (isNormal)
+        return float4(normal * 0.5 + 0.5, 1);
+    else if (isTexture)
+        return float4(input.TexCoord, 0, 1);
+    else if (isDiffuse)
+        return float4(diffuse, 1);
+    else if (isAmbient)
+        return float4(ambient, 1);
+    else if (isSpecular)
+        return float4(specular, 1);
+    else
+        return float4(0, 0, 1, 1); // blueScreen error
+
+	// Debug shading #2: map and return texture coordinates as a color (blue = 0)
+    //return float4(input.TexCoord, 0, 1);
+}
