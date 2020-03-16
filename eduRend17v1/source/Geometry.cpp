@@ -117,10 +117,23 @@ void Geometry_t::DisplayModeBuffer(
 
 void Geometry_t::MapTextureMaterialBuffer(
 	ID3D11Buffer* texture_material_buffer,
-	material_t material
-)
+	material_t material)
 {
 
+}
+
+void Geometry_t::MapCubeMapBuffer(
+	ID3D11Buffer* CubeMap_Buffer,
+	ID3D11ShaderResourceView* map_Cube_TexSRV,
+	ID3D11Resource* map_Cube_Tex,
+	int isCubeMap)
+{
+	D3D11_MAPPED_SUBRESOURCE resource;
+	dxdevice_context->Map(CubeMap_Buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &resource);
+	CubeMapBuffer_t* cube_buffer_ = (CubeMapBuffer_t*)resource.pData;
+	dxdevice_context->PSSetShaderResources(5, 1, &map_Cube_TexSRV);
+	cube_buffer_->isCubeMap = isCubeMap;
+	dxdevice_context->Unmap(CubeMap_Buffer, 0);
 }
 
 Quad_t::Quad_t(

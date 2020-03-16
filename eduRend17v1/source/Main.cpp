@@ -31,17 +31,28 @@ ID3D11Buffer*			g_MatrixBuffer = nullptr;
 ID3D11Buffer*			g_MaterialBuffer = nullptr;
 ID3D11Buffer*			g_LightCameraBuffer = nullptr;
 ID3D11Buffer*			g_DisplayModeBuffer = nullptr;
+ID3D11Buffer*			g_CubeMapBuffer = nullptr;
+
+
 InputHandler*			g_InputHandler = nullptr;
 
 int width = 1920 / 2;
 int height = 1080 / 2;
 
+
+// DisplayBuffer output variables
 bool isPhong = true;
 bool isNormal = false;
 bool isTextured = false;
 bool isDiffuse = false;
 bool isAmbient = false;
 bool isSpecular = false;
+
+HRESULT hr;
+std::wstring wstr;	// for conversion from string to wstring
+std::string str;
+ID3D11ShaderResourceView*	map_Cube_TexSRV = nullptr;
+ID3D11Resource*				map_Cube_Tex = nullptr;
 
 //--------------------------------------------------------------------------------------
 // Forward declarations
@@ -67,6 +78,7 @@ float camera_vel;	// Camera movement velocity in units/s
 float camera_vel_slow = 5.0f;
 float camera_vel_fast = 15.0f;
 float camera_rotation_vel = 2.5f / 1.5f;
+
 Quad_t* quad;
 Cube_t* cube;
 
@@ -84,6 +96,7 @@ mat4f MbigSphere;
 mat4f MsmallerSphere;
 mat4f MnormalSphere;
 mat4f MskyBox;
+
 float angle = 0;			// A per-frame updated rotation angle (radians)...
 float angle_vel = fPI / 2;	// ...and its velocity
 // World-to-view matrix
@@ -120,6 +133,14 @@ void initObjects()
 	smallerSphere = new OBJModel_t("../../assets/sphere/sphere.obj", g_Device, g_DeviceContext);
 	normalSphere = new OBJModel_t("../../assets/NormalMapTestingSphere/NormalSphere.obj", g_Device, g_DeviceContext);
 	skyBox = new OBJModel_t("../../assets/Cube/Cube.obj", g_Device, g_DeviceContext);
+
+	//Load CubeMapTextures
+	str = "../../assets/cubemaps/snowcube1024.dds";
+	wstr = std::wstring(str.begin(), str.end());
+
+	// Load texture to device and obtain pointers to it
+	hr = DirectX::CreateDDSTextureFromFile(g_Device, g_DeviceContext, wstr.c_str(), &map_Cube_Tex, &map_Cube_TexSRV);
+
 }
 
 //
@@ -238,7 +259,7 @@ void updateObjects(float dt)
 						mat4f::rotation(-angle * 5, 0, 1, 0) *	
 						mat4f::scaling(0.25f);
 
-	MskyBox = mat4f::translation(0,0,0) * mat4f::scaling(120);
+	MskyBox = mat4f::translation(camera->position) * mat4f::scaling(200);
 
 	// Increase the rotation angle. dt is the frame time step.
 	angle += angle_vel * dt;
@@ -326,6 +347,7 @@ void renderObjects()
 	skyBox->MapMaterialBuffer(g_MaterialBuffer, redAmb, blueDiff, redSpec, float4(highGloss, 0, 0, 0), true, true, true, true, true);
 	skyBox->MapLightCameraBuffers(g_LightCameraBuffer, lightpos, cameraPos);
 	skyBox->DisplayModeBuffer(g_DisplayModeBuffer, isPhong, isNormal, isTextured, isAmbient, isDiffuse, isSpecular);
+	skyBox->MapCubeMapBuffer(g_CubeMapBuffer, map_Cube_TexSRV, map_Cube_Tex, true);
 	skyBox->render();
 }
 
@@ -701,6 +723,17 @@ void InitShaderBuffers()
 
 	ASSERT(hr = g_Device->CreateBuffer(&DisplayModeBuffer_desc, nullptr, &g_DisplayModeBuffer));
 
+	D3D11_BUFFER_DESC CubeMapBuffer_desc = { 0 };
+	CubeMapBuffer_desc.Usage = D3D11_USAGE_DYNAMIC;
+	CubeMapBuffer_desc.ByteWidth = sizeof(CubeMapBuffer_t);
+	CubeMapBuffer_desc.BindFlags = D3D11_BIND_CONSTANT_BUFFER;
+	CubeMapBuffer_desc.CPUAccessFlags = D3D11_CPU_ACCESS_WRITE;
+	CubeMapBuffer_desc.MiscFlags = 0;
+	CubeMapBuffer_desc.StructureByteStride = 0;
+
+	ASSERT(hr = g_Device->CreateBuffer(&CubeMapBuffer_desc, nullptr, &g_CubeMapBuffer));
+	ASSERT(g_CubeMapBuffer);
+
 }
 
 HRESULT CreateRenderTargetView()
@@ -802,6 +835,9 @@ HRESULT Render(float deltaTime)
 
 	// set DisplayMode buffer
 	g_DeviceContext->PSSetConstantBuffers(2, 1, &g_DisplayModeBuffer);
+
+	// set Cubemap buffer
+	g_DeviceContext->PSSetConstantBuffers(3, 1, &g_CubeMapBuffer);
 
 	// time to render our objects
 	renderObjects();

@@ -80,6 +80,13 @@ public:
 		material_t material
 	);
 
+	virtual void MapCubeMapBuffer(
+		ID3D11Buffer* CubeMap_Buffer,
+		ID3D11ShaderResourceView* map_Cube_TexSRV,
+		ID3D11Resource* map_Cube_Tex,
+		int isCubeMap
+	);
+
 	//
 	// Abstract render method: must be implemented by derived classes
 	//

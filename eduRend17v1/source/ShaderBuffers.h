@@ -36,4 +36,16 @@ struct DisplayModeBuffer_t
 	float2 pad;
 };
 
+
+//Still not fully implemented in Geometry.cpp and .h
+struct CubeMapBuffer_t 
+{
+	ID3D11Buffer* CubeMap_Buffer;
+	ID3D11ShaderResourceView* map_Cube_TexSRV;
+	ID3D11Resource* map_Cube_Tex;
+	int isCubeMap = false;
+	
+	float3 pad;
+};
+
 #endif

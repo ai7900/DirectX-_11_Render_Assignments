@@ -2,7 +2,8 @@ Texture2D texAmbient : register(t0);
 Texture2D texDiffuse : register(t1);
 Texture2D texSpecular : register(t2);
 Texture2D texNormal : register(t4);
-//Texture2D texCubeMap : register(t5);
+
+TextureCube texCubeMap : register(t5);
 
 SamplerState texSampler         : register(s0);
 SamplerState trilinearSampler   : register(s1);
@@ -35,6 +36,11 @@ cbuffer DisplayModeChange : register(b2)
     int isAmbient, isDiffuse, isSpecular;
 }
 
+cbuffer CubeMapBuffer : register(b3)
+{
+    int isCubeMap;
+}
+
 
 //-----------------------------------------------------------------------------------------
 // Pixel Shader
@@ -58,8 +64,6 @@ float4 PS_main(PSIn input) : SV_Target
     float3x3 TBN = (float3x3(tangent, binormal, normal));
     
     normal = !hasNormalMap && length(normalTexColor) > 0 ? input.Normal : normalize(mul(manipulatedNormal, TBN));
-    
-    
     
     // Set diffuse, ambient and specular colors
     float3 sampleDiffuseTex = texDiffuse.Sample(texSampler, input.TexCoord);
@@ -87,8 +91,21 @@ float4 PS_main(PSIn input) : SV_Target
     // R * V = dotProductReflView
     // a = alpha
     
+    if (isCubeMap)
+    {
+        float4 reflectColor;
+        float4 refractColor;
+        float3 reflect_ = reflect(-viewVector, normal);
+        float3 refract_ = refract(-viewVector, normal, float(1.3f));
+        
+        reflectColor = texCubeMap.Sample(texSampler, reflect_);
+        refractColor = texCubeMap.Sample(texSampler, refract_);
+        
+        diffuse = 0.3f * ((reflectColor + refractColor) / 2);
+    }
+    
     float3 PhongShader = ambient + max(diffuse * dotProductLightVec, 0) + max(specular * pow(dotProductReflView, alpha_), 0);
-
+    
     // Different outputs
     if (isPhong)
         return float4(PhongShader, 0);
